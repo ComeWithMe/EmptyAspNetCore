@@ -42,7 +42,7 @@ namespace EmptyAspNetCore
             public FileLogger(string path)
             {
                 filePath = path;
-            }
+            } 
             public IDisposable BeginScope<TState>(TState state)
             {
                 return null;
