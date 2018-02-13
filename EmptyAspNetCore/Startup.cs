@@ -1,15 +1,13 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.IO;
-using System.Linq;
-using System.Text;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Routing;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.FileProviders;
-using Microsoft.Extensions.Logging;
+using Newtonsoft.Json;
 
 namespace EmptyAspNetCore
 {
@@ -17,70 +15,50 @@ namespace EmptyAspNetCore
     {
         public void ConfigureServices(IServiceCollection services)
         {
-
+            services.AddRouting();
         }
 
-        public void Configure(IApplicationBuilder app, ILoggerFactory loggerFactory)
+        public void Configure(IApplicationBuilder app)
         {
-            loggerFactory.AddProvider(new FileLoggerProvider("D://123.txt"));
+            var myRouteHandler = new RouteHandler(Handle);
+            var routeBuilder = new RouteBuilder(app, myRouteHandler);
+            routeBuilder.MapRoute("default", "{action=Index}/{name}-{year}");
+            app.UseRouter(routeBuilder.Build());
+
             app.Run(async (context) =>
             {
-                // создаем объект логгера
-                var logger = loggerFactory.CreateLogger("RequestInfoLogger");
-                // пишем на консоль информацию
-                logger.LogInformation("Processing request {0}", context.Request.Path);
-
                 await context.Response.WriteAsync("Hello World!");
             });
         }
 
-
-        public class FileLogger : ILogger
+        // собственно обработчик маршрута
+        private async Task Handle(HttpContext context)
         {
-            private string filePath;
-            private object _lock = new object();
-            public FileLogger(string path)
-            {
-                filePath = path;
-            } 
-            public IDisposable BeginScope<TState>(TState state)
-            {
-                return null;
-            }
+            var routeValues = context.GetRouteData().Values;
+            var action = routeValues["action"].ToString();
+            var name = routeValues["name"].ToString();
+            var year = routeValues["year"].ToString();
+            await context.Response.WriteAsync($"action: {action} | name: {name} | year:{year}");
+        }
+    }
 
-            public bool IsEnabled(LogLevel logLevel)
-            {
-                //return logLevel == LogLevel.Trace;
-                return true;
-            }
 
-            public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception exception, Func<TState, Exception, string> formatter)
-            {
-                if (formatter != null)
-                {
-                    lock (_lock)
-                    {
-                        File.AppendAllText(filePath, formatter(state, exception) + Environment.NewLine);
-                    }
-                }
-            }
+    public static class SessionExtensions
+    {
+        public static void Set<T>(this ISession session, string key, T value)
+        {
+            session.SetString(key, JsonConvert.SerializeObject(value));
         }
 
-        public class FileLoggerProvider : ILoggerProvider
+        public static T Get<T>(this ISession session, string key)
         {
-            private string path;
-            public FileLoggerProvider(string _path)
-            {
-                path = _path;
-            }
-            public ILogger CreateLogger(string categoryName)
-            {
-                return new FileLogger(path);
-            }
-
-            public void Dispose()
-            {
-            }
+            var value = session.GetString(key);
+            return value == null ? default(T) : JsonConvert.DeserializeObject<T>(value);
         }
+    }
+    class Person
+    {
+        public string Name { get; set; }
+        public int Age { get; set; }
     }
 }
